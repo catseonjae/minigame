@@ -1,6 +1,7 @@
 import pygame
 import sys
 import random
+import time
 SCREEN_WIDTH = 640
 SCREEN_HEIGHT = 720
 
@@ -14,158 +15,197 @@ BLUE=(0,0,255)
 INDIGO=(0,5,255)
 PURPLE=(100,0,255)
 
-block = [BLACK,RED,GREEN,BLUE,YELLOW]
 
 pygame.init()
 pygame.display.set_caption("Component")
-screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 
+class Component:
+    def __init__(self, block_size=32,block=[BLACK,RED,GREEN,BLUE,WHITE],x_size=10,y_size=20):
 
+        self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+        
+        block_size=32
+        
+        self.x_size=x_size
+        self.y_size=y_size
+        
+        self.block = block
+        self.block_size=block_size
+        self.board=[[0 for j in range(x_size)] for i in range(y_size)]
+        self.score=0
 
-block_size=32
-board=[[random.randint(1,4) for j in range(10)] for i in range(20)]
-start=[SCREEN_WIDTH/2-block_size*5,SCREEN_HEIGHT/2-block_size*10]
-end=[SCREEN_WIDTH/2+block_size*5,SCREEN_HEIGHT/2+block_size*10]
-hold=[-1,-1]
-score=0
+        self.event_queue=[]
 
-def down():
-    global board
-    for i in range(10):
-        up=19
-        b=0
-        for j in range(20):
-            y=19-j
-            while up>=0 and board[up][i]==0:
+        self.start=[SCREEN_WIDTH/2-self.block_size*5,SCREEN_HEIGHT/2-self.block_size*10]
+        self.end=[SCREEN_WIDTH/2+self.block_size*5,SCREEN_HEIGHT/2+self.block_size*10]
+        self.dy=[0,-1,0,1]
+        self.dx=[1,0,-1,0]
+
+        self.clicked=[-1,-1]
+        self.white_cnt=0
+        for i in self.board:
+            for j in self.board:
+                if j==len(self.block)-1:
+                    self.white_cnt+=1
+        self.started_time=time.time()
+        self.finished_time=0
+        self.generate()
+
+    def cheat(self):
+        for i in range(self.y_size):
+            for j in range(self.x_size):
+                self.board[i][j]=len(self.block)-1
+        self.white_cnt=self.x_size*self.y_size
+    def push(self):
+        for i in range(10):
+            up=19
+            for j in range(20):
+                y=19-j
+                while up>=0 and self.board[up][i]==0:
+                    up-=1
+                if up<0:
+                    self.board[y][i]=0
+                else:
+                    self.board[y][i]=self.board[up][i]
                 up-=1
-            if up<0:
-                board[y][i]=0
-            else:
-                board[y][i]=board[up][i]
-            up-=1
+        self.generate()
 
-def distribute(size):
-    ret=[]
-    while size>0:
-        if size<=2:
-            ret.append(size)
-            break
-        t=random.randint(2,min(5,size))
-        ret.append(t)
-        size-=t
-    return ret
-def generate():
-    component=[]
-    q=[]
-    for i in range(10):
-        if board[0][i]==0:
-            q.append([i,0])
-    while q!=[]:
-        now=q[0]
-        del q[0]
-        if now in component:
-            continue
-        component.append(now)
-        for i in range(4):
-            x=now[0]+dx[i]
-            y=now[1]+dy[i]
-            if [x,y] in component:
-                continue
-            if x<0 or x>=10 or y<0 or y>=20:
-                continue
-            if board[y][x]!=0:
-                continue
-            q.append([x,y])
-    distribution=distribute(len(component))
-    idx=0
-    for i in distribution:
-        c=random.randint(1,4)
-        for j in range(i):
-            now=component[idx]
-            board[now[1]][now[0]]=c
-            idx+=1
-dy=[0,-1,0,1]
-dx=[1,0,-1,0]
-def remove(a,b,c):
-    component=[]
-    q=[a,b]
-    while q!=[]:
-        now=q[0]
-        del q[0]
-        if now in component:
-            continue
-        component.append(now)
-        for i in range(4):
-            x=now[0]+dx[i]
-            y=now[1]+dy[i]
-            if [x,y] in component:
-                continue
-            if x<0 or x>=10 or y<0 or y>=20:
-                continue
-            if board[y][x]!=c:
-                continue
-            q.append([x,y])
-    if len(component)<7:
-        return
-    global score
-    score+=len(component)**2
-    for x,y in component:
-        board[y][x]=0
-    display()
-    import time
-    time.sleep(0.5)
-    down()
-    generate()
-    global hold
-    hold=[-1,-1]
+    def distribute(self,size):
+        ret=[]
+        while size>0:
+            if size<=2:
+                ret.append(size)
+                break
+            t=random.randint(3,min(size,4))
+            ret.append(t)
+            size-=t
+        return ret
 
-
-def press():
-    global hold
-    pos = pygame.mouse.get_pos()
-    if pos[0]<start[0] or pos[1]<start[1]:
-        return
-    if pos[0]>end[0] or pos[1]>end[1]:
-        return
-    pos=[pos[i]-start[i] for i in range(2)]
-    pos=[int(pos[i]//block_size) for i in range(2)]
-    if hold==[-1,-1]:
-        hold=pos
-    elif pos==hold:
-        hold=[-1,-1]
-    else:
-        if board[hold[1]][hold[0]]!=board[pos[1]][pos[0]]:
+    def generate(self):
+        component=[]
+        q=[]
+        for i in range(10):
+            if self.board[0][i]==0:
+                q.append([i,0])
+        while q!=[]:
+            now=q[0]
+            del q[0]
+            if now in component:
+                continue
+            component.append(now)
+            for i in range(4):
+                x=now[0]+self.dx[i]
+                y=now[1]+self.dy[i]
+                if [x,y] in component:
+                    continue
+                if x<0 or x>=10 or y<0 or y>=20:
+                    continue
+                if self.board[y][x]!=0:
+                    continue
+                q.append([x,y])
+        distribution=self.distribute(len(component))
+        idx=0
+        for i in distribution:
+            c=random.randint(1,len(self.block)-1)
+            if c==len(self.block)-1:
+                self.white_cnt+=i
+            for j in range(i):
+                now=component[idx]
+                self.board[now[1]][now[0]]=c
+                idx+=1
+    def remove(self):
+        component=[]
+        q=[self.clicked]
+        color=self.board[self.clicked[1]][self.clicked[0]]
+        if color==len(self.block)-1:
             return
-        remove(pos,hold,board[hold[1]][hold[0]])
-def min(a, b):
-    if a<b:
-        return a
-    return b
-def dark(color):
-    return (min(255,(color[i])*0.5) for i in range(3))
+        while q!=[]:
+            now=q[0]
+            del q[0]
+            if now in component:
+                continue
+            component.append(now)
+            for i in range(4):
+                x=now[0]+self.dx[i]
+                y=now[1]+self.dy[i]
+                if [x,y] in component:
+                    continue
+                if x<0 or x>=10 or y<0 or y>=20:
+                    continue
+                if self.board[y][x]!=color:
+                    continue
+                q.append([x,y])
+        self.score+=len(component)**2
+        for x,y in component:
+            self.board[y][x]=0
+        self.push()
+
+    def press(self):
+        if self.done():
+            return
+        pos = pygame.mouse.get_pos()
+        if pos[0]<self.start[0] or pos[1]<self.start[1]:
+            return
+        if pos[0]>self.end[0] or pos[1]>self.end[1]:
+            return
+        pos=[pos[i]-self.start[i] for i in range(2)]
+        pos=[int(pos[i]//self.block_size) for i in range(2)]
+        self.clicked=pos
+        self.remove()
+    def min(a, b):
+        if a<b:
+            return a
+        return b
+    def loop(self):
+        import time
+        t=time.time()
+        done=[]
+        for i in range(len(self.event_queue)):
+            if self.event_queue[i][0]<=t:
+                self.event_queue[i][1]()
+                done.append(i)
+        done.reverse()
+        for i in done:
+            del self.event_queue[i]
+        self.display()
 
 
+    def display(self):
+        self.screen.fill(BLACK)
+        for i in range(20):
+            for j in range(10):
+                color=self.block[self.board[i][j]]
+                pygame.draw.rect(self.screen, color, (self.start[0]+self.block_size*j,self.start[1]+self.block_size*i,self.block_size,self.block_size))
+        pygame.display.update()
 
+    def display_end(self):
+        self.screen.fill(BLACK)
+        for i in range(20):
+            for j in range(10):
+                color=self.block[self.board[i][j]]
+                pygame.draw.rect(self.screen, color, (self.start[0]+self.block_size*j,self.start[1]+self.block_size*i,self.block_size,self.block_size))
+        font = pygame.font.SysFont("notosanscjkkr",30)
+        text = font.render(f"finished at {round(self.finished_time-self.started_time,3)} ",True,BLACK)
+        r=text.get_rect()
+        r.centerx=SCREEN_WIDTH/2
+        r.centery=SCREEN_HEIGHT/2
+        self.screen.blit(text,r) 
+        pygame.display.update()
+    def done(self):
+        return self.white_cnt==self.x_size*self.y_size
+game=Component()
 clock = pygame.time.Clock()
-def display():
-    screen.fill(BLACK)
-    for i in range(20):
-        for j in range(10):
-            color=block[board[i][j]]
-            if i<5:
-                color=(min(255,(color[0])*0.5),min(255,(color[1])*0.5),min(255,(color[2])*0.5))
-            pygame.draw.rect(screen, color, (start[0]+block_size*j,start[1]+block_size*i,block_size,block_size))
-    if hold != [-1,-1]:
-        i=hold[1]
-        j=hold[0]
-        pygame.draw.rect(screen, WHITE,(start[0]+block_size*j,start[1]+block_size*i,block_size,block_size),5)
-    pygame.display.update()
 while True:
     clock.tick(60)
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             sys.exit()
         if event.type==pygame.MOUSEBUTTONDOWN:
-            press()
-    display()
-    # print(score)
+            game.press()
+    if game.finished_time!=0:
+        game.display_end()
+    elif game.done():
+        game.finished_time=time.time()
+        game.display_end()
+    else:
+        game.loop()
